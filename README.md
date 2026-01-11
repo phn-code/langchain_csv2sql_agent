@@ -28,9 +28,15 @@ chat-ui (Frontend): A Next.js web application (Port 3000) for the user interface
 Prerequisites
 Docker & Docker Compose
 An OpenAI API Key
-Installation
+Langchain API Key
 
-Clone the repository:
+Installation
+1. Clone the repository:
+```bash
+git clone 
+cd insight_factory
+
+
 code
 Bash
 download
