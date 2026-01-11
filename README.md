@@ -1,4 +1,4 @@
-- The pprogram is a full-stack data intelligence platform that automates the process of turning raw CSV files into a queryable SQL database and provides an AI-powered chat interface to interact with that data.
+- The program is a full-stack data intelligence platform that automates the process of turning raw CSV files into a queryable SQL database and provides an AI-powered chat interface to interact with that data.
 - It features an intelligent data loader that automatically detects schemas and relationships (Foreign Keys) between disconnected CSVs, and a LangGraph-based agent that answers natural language questions about your data.
 
 🌟 Features
