@@ -1,0 +1,12 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "agent": "./main.py:app"
+  },
+  "env": "../.env",
+  "python_version": "3.11",
+  "dockerfile_lines": [
+    "RUN apt-get update && apt-get install -y libpq-dev gcc",
+    "RUN pip install --upgrade pip"
+  ]
+}

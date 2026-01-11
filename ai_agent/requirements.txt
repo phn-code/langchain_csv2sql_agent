@@ -1,0 +1,15 @@
+langchain
+langchain-openai
+langchain-community
+langchain-experimental
+langgraph
+langgraph-cli[inmem]
+uvicorn
+fastapi
+psycopg2-binary
+pandas
+matplotlib
+sqlalchemy
+python-dotenv
+pydantic
+

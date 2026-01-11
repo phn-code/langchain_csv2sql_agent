@@ -1,0 +1,73 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16
+    container_name: csv_postgres
+    environment:
+      POSTGRES_USER: csvuser
+      POSTGRES_PASSWORD: csvpass
+      POSTGRES_DB: csvdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U csvuser -d csvdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: ./csv_to_sql
+    container_name: csv_loader
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./csv_to_sql:/app
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: csvdb
+      DB_USER: csvuser
+      DB_PASSWORD: csvpass
+
+  langgraph_server:
+    build: ./ai_agent
+    container_name: langgraph_api
+    depends_on:
+      db:
+        condition: service_healthy
+      app:
+        condition: service_completed_successfully
+    ports:
+      - "2024:8123"
+    volumes:
+      - ./ai_agent:/app
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: csvdb
+      DB_USER: csvuser
+      DB_PASSWORD: csvpass
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      LANGCHAIN_TRACING_V2: "true"
+      LANGCHAIN_API_KEY: ${LANGCHAIN_API_KEY}
+      LANGCHAIN_PROJECT: "sql-agent-graph"
+
+  # --- UPDATED SERVICE ---
+  chat-ui:
+    build: 
+      context: ./agent-chat-ui # Builds from the folder you just cloned
+      dockerfile: Dockerfile
+    container_name: agent_chat_ui
+    ports:
+      - "3000:3000"
+    depends_on:
+      - langgraph_server
+    environment:
+      NEXT_PUBLIC_LANGGRAPH_API_URL: "http://localhost:2024"
+
+volumes:
+  pgdata:
