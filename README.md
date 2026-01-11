@@ -33,81 +33,50 @@ Langchain API Key
 Installation
 1. Clone the repository:
 ```bash
-git clone 
-cd insight_factory
+git clone https://github.com/phn-code/insight_factory_sub_Kit_nguyen
+cd insight_factory 
+```
 
-
-code
-Bash
-download
-content_copy
-expand_less
-git clone <repository-url>
-cd insight_factory
-
-Prepare your Data:
+2. Prepare your Data:
 Place your raw .csv files into the loader directory:
-
-code
-Bash
-download
-content_copy
-expand_less
+```bash
 # Create the directory if it doesn't exist
 mkdir -p csv_to_sql/csv_files
-
 # Copy your CSVs there
 cp /path/to/your/data/*.csv ./csv_to_sql/csv_files/
 
-Configure Environment Variables:
+```
+3. Configure Environment Variables:
 Create a .env file in the root directory (or ensure your shell has these exported):
-
-code
-Ini
-download
-content_copy
-expand_less
-OPENAI_API_KEY=sk-your-openai-key-here
-
-# Optional: For LangSmith Tracing
-LANGCHAIN_API_KEY=lsv2-your-langchain-key
-
-Build and Run:
-
-code
-Bash
-download
-content_copy
-expand_less
+```bash
+OPENAI_API_KEY=
+LANGCHAIN_API_KEY=
+LANGCHAIN_TRACING_V2=true
+LANGCHAIN_PROJECT=sql-agent-docker
+PROACTIVE_INSIGHTS= false
+```
+4. Build and Run:
+```bash
 docker-compose up --build
-
+```
 Wait a few moments for the database to initialize and the data loader to finish processing your CSVs.
 
 🖥️ Usage
 1. The Data Loading Process
-
 Check the logs of the csv_loader container to see the schema detection in action:
-
-code
-Bash
-download
-content_copy
-expand_less
+```bash
 docker logs -f csv_loader
-
+```
 You will see messages indicating that tables were created, Primary Keys were added, and Foreign Keys were inferred and validated.
 
 2. Chatting with Data
-
 Open your browser and navigate to:
 http://localhost:3000
 
-Ask questions: "How many customers bought product X?" or "Show me the top 5 sales regions."
-
-The agent will generate SQL queries based on the schema created by the loader and return the results.
+- Ask questions: "How many customers bought product X?" or "Show me the top 5 sales regions."
+- The agent will generate SQL queries based on the schema created by the loader and return the results.
 
 3. API Access
-
 The LangGraph API is available at http://localhost:2024.
 
 🛠 Configuration Details
@@ -116,32 +85,20 @@ Database Credentials
 Defaults are set in docker-compose.yaml.
 
 Host: db
-
 Port: 5432
-
 User: csvuser
-
 Password: csvpass
-
 Database: csvdb
 
 Schema Detection Logic
-
 The data_loader.py script uses the following logic to infer relationships:
-
-Cleaning: Converts file names to snake_case table names.
-
-PK Detection: Looks for columns named id, table_id, or tablename_id that are unique and non-null.
-
-FK Detection: Scans other columns ending in _id. It attempts to match them against known table names (e.g., user_id -> looks for table users or user).
-
-Validation: It runs a SQL query to ensure all FK values exist in the target PK column. If there is a constant numeric offset (e.g., IDs start at 0 in one file but 1 in another), it attempts to UPDATE the data to fix the relationship automatically.
+- Cleaning: Converts file names to snake_case table names.
+- PK Detection: Looks for columns named id, table_id, or tablename_id that are unique and non-null.
+- FK Detection: Scans other columns ending in _id. It attempts to match them against known table names (e.g., user_id -> looks for table users or user).
+- Validation: It runs a SQL query to ensure all FK values exist in the target PK column. If there is a constant numeric offset (e.g., IDs start at 0 in one file but 1 in another), it attempts to UPDATE the data to fix the relationship automatically.
 
 🐛 Troubleshooting
-
-"Database not ready" errors: The services are configured with depends_on and health checks, but if the csv_loader fails to connect immediately, it will retry automatically (up to 10 times).
-
-Invalid Foreign Keys: If the loader warns about "invalid references," it means the ID in your child table doesn't exist in the parent table, and the auto-fixer couldn't find a constant offset. Check your CSV data quality.
-
-Frontend connection refused: Ensure the langgraph_server container is running and healthy (docker ps). The frontend expects the API at http://localhost:2024.
+- "Database not ready" errors: The services are configured with depends_on and health checks, but if the csv_loader fails to connect immediately, it will retry automatically (up to 10 times).
+- Invalid Foreign Keys: If the loader warns about "invalid references," it means the ID in your child table doesn't exist in the parent table, and the auto-fixer couldn't find a constant offset. Check your CSV data quality.
+- Frontend connection refused: Ensure the langgraph_server container is running and healthy (docker ps). The frontend expects the API at http://localhost:2024.
 
