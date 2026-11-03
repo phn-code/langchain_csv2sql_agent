@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
@@ -28,7 +28,7 @@ async def run(model: ScriptedModel, db: Database, messages: list[Any]) -> tuple[
     state: dict[str, Any] = {}
     async for mode, chunk in graph.astream({"messages": messages}, stream_mode=["custom", "values", "messages"]):
         if mode == "messages":
-            _, metadata = chunk
+            _, metadata = cast(tuple[Any, dict[str, Any]], chunk)
             # Only the answer reaches the user's screen; routing and SQL drafting stay internal.
             assert metadata["langgraph_node"] == "respond"
             continue

@@ -77,14 +77,12 @@ question = "How many suppliers are there per continent?"
 sql = "SELECT continent, count(*) FROM sales_suppliers GROUP BY 1"
 
 [[case]]
-id = "most_reviewed_franchises"
-question = "Which franchises have the most customer reviews? Include ties."
+id = "reviews_by_country"
+question = "How many customer reviews are there for franchises in each country?"
 sql = """
-SELECT name, n FROM (
-  SELECT f.name, count(*) AS n, rank() OVER (ORDER BY count(*) DESC) AS r
-  FROM media_customer_reviews m JOIN sales_franchises f USING (franchise_id)
-  GROUP BY f.franchise_id, f.name
-) ranked WHERE r = 1
+SELECT f.country, count(*)
+FROM media_customer_reviews m JOIN sales_franchises f USING (franchise_id)
+GROUP BY 1
 """
 
 [[case]]
