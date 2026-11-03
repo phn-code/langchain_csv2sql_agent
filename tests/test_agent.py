@@ -26,7 +26,12 @@ async def run(model: ScriptedModel, db: Database, messages: list[Any]) -> tuple[
     graph = build_graph(model, db)
     events: list[dict[str, Any]] = []
     state: dict[str, Any] = {}
-    async for mode, chunk in graph.astream({"messages": messages}, stream_mode=["custom", "values"]):
+    async for mode, chunk in graph.astream({"messages": messages}, stream_mode=["custom", "values", "messages"]):
+        if mode == "messages":
+            _, metadata = chunk
+            # Only the answer reaches the user's screen; routing and SQL drafting stay internal.
+            assert metadata["langgraph_node"] == "respond"
+            continue
         assert isinstance(chunk, dict)
         if mode == "custom":
             events.append(chunk)

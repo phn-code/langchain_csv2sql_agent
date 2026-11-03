@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { Report, ReportTable } from "../contract";
 import { formatCount } from "../format";
-import { AlertIcon, CheckIcon, CloseIcon, KeyIcon, LinkIcon, ShieldIcon, SparkIcon, TableIcon } from "./icons";
+import { AlertIcon, CheckIcon, CloseIcon, KeyIcon, ShieldIcon, SparkIcon, TableIcon } from "./icons";
 
 function Stat({ label, value, tone }: { label: string; value: string; tone?: "warn" }) {
   return (
@@ -114,15 +114,15 @@ export function IngestReportBody({ report }: { report: Report }) {
                 <span className="font-mono text-[12.5px] text-ink">
                   {r.table}.<span className="font-semibold">{r.column}</span>
                 </span>
-                <LinkIcon className="size-3.5 text-accent" aria-label="references" />
+                <span className="text-accent" aria-label="references">→</span>
                 <span className="font-mono text-[12.5px] text-ink">
                   {r.parent_table}.<span className="font-semibold">{r.parent_column}</span>
                 </span>
                 <span className="ml-auto flex flex-wrap gap-1.5">
                   {r.offset !== 0 && (
                     <span className="rounded-full bg-warn-soft px-2 py-0.5 text-[11px] font-medium text-warn">
-                      IDs shifted by {r.offset > 0 ? "+" : ""}
-                      {r.offset} to match
+                      IDs shifted by {r.offset > 0 ? "+" : "−"}
+                      {formatCount(Math.abs(r.offset))} to match
                     </span>
                   )}
                   {r.origin === "ai" ? (
@@ -200,7 +200,8 @@ export function IngestReportDialog({ report, onClose }: { report: Report | null;
               <CloseIcon className="size-4" />
             </button>
           </header>
-          <div className="overflow-y-auto px-5 py-5">
+          {/* Focus the body on open so the close button doesn't greet the reader with a focus ring. */}
+          <div className="overflow-y-auto px-5 py-5 outline-none" tabIndex={-1} autoFocus>
             <IngestReportBody report={report} />
           </div>
         </div>

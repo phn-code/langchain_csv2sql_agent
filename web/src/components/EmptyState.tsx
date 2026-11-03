@@ -1,4 +1,5 @@
-import type { UploadState } from "../datasets";
+import type { Datasets } from "../datasets";
+import { UploadStatus } from "./Upload";
 import { ChartIcon, SparkIcon, TableIcon, UploadIcon } from "./icons";
 
 const BAKERY_EXAMPLES = [
@@ -18,19 +19,32 @@ function exampleQuestions(tables: string[]): string[] {
 }
 
 export function EmptyState({
-  tables,
-  upload,
+  datasets,
   onAsk,
-  onLoadSample,
   onBrowse,
 }: {
-  tables: string[] | null;
-  upload: UploadState;
+  datasets: Datasets;
   onAsk: (q: string) => void;
-  onLoadSample: () => void;
   onBrowse: () => void;
 }) {
-  if (tables === null) return null;
+  const { schema, upload } = datasets;
+  if (schema.kind === "loading") return null;
+  if (schema.kind === "error") {
+    return (
+      <div className="mx-auto max-w-md px-4 py-16 text-center">
+        <h1 className="text-lg font-semibold text-ink">Can't load your tables</h1>
+        <p className="mt-2 text-sm text-muted">{schema.message}</p>
+        <button
+          type="button"
+          onClick={() => void datasets.refresh()}
+          className="mt-4 rounded-lg border border-line bg-surface px-4 py-2 text-sm font-medium text-ink hover:border-line-strong"
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
+  const tables = schema.schema.tables.map((t) => t.name);
   if (tables.length === 0) {
     const busy = upload.kind === "uploading" || upload.kind === "processing";
     return (
@@ -54,7 +68,7 @@ export function EmptyState({
           </button>
           <button
             type="button"
-            onClick={onLoadSample}
+            onClick={() => void datasets.loadSample()}
             disabled={busy}
             className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface px-4 py-2 text-sm font-medium text-ink hover:border-line-strong disabled:opacity-50"
           >
@@ -62,6 +76,9 @@ export function EmptyState({
           </button>
         </div>
         <p className="mt-3 text-xs text-muted">The sample is six tables from a fictional bakery franchise.</p>
+        <div className="mt-5 w-full max-w-sm text-left">
+          <UploadStatus state={upload} onDismiss={datasets.dismissError} />
+        </div>
       </div>
     );
   }

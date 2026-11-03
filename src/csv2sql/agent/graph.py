@@ -1,6 +1,6 @@
 """plan -> write_sql <-> run_sql -> respond.
 
-Only `respond` streams tokens to the user; the structured calls are tagged `langsmith:nostream`. Each step emits
+Only `respond` streams tokens to the user; the structured calls are tagged `nostream`. Each step emits
 a custom progress event so a UI can show what the agent is doing.
 """
 
@@ -10,6 +10,7 @@ from typing import Any, Literal, TypedDict
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, AnyMessage, HumanMessage
 from langgraph.config import get_stream_writer
+from langgraph.constants import TAG_NOSTREAM
 from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from pydantic import BaseModel, Field
@@ -101,8 +102,8 @@ def _attempts(failures: Sequence[Failure]) -> str:
 
 
 def build_graph(model: BaseChatModel, database: Database, *, max_attempts: int = 3) -> CompiledStateGraph[Any]:
-    planner = model.with_structured_output(Plan).with_config(tags=["langsmith:nostream"], run_name="plan")
-    writer = model.with_structured_output(SqlDraft).with_config(tags=["langsmith:nostream"], run_name="write_sql")
+    planner = model.with_structured_output(Plan).with_config(tags=[TAG_NOSTREAM], run_name="plan")
+    writer = model.with_structured_output(SqlDraft).with_config(tags=[TAG_NOSTREAM], run_name="write_sql")
 
     async def plan(state: State) -> dict[str, Any]:
         _progress("plan", "started")

@@ -59,7 +59,6 @@ export function Workspace({
     };
   }, [drawer]);
 
-  const tables = datasets.schema.kind === "ready" ? datasets.schema.schema.tables.map((t) => t.name) : null;
   const closeDrawer = (fn: () => void) => () => {
     fn();
     setDrawer(false);
@@ -140,13 +139,7 @@ export function Workspace({
 
         <div data-scroller className="min-h-0 flex-1 overflow-y-auto">
           {session.turns.length === 0 ? (
-            <EmptyState
-              tables={tables}
-              upload={datasets.upload}
-              onAsk={session.submit}
-              onLoadSample={() => void datasets.loadSample()}
-              onBrowse={() => fileInput.current?.click()}
-            />
+            <EmptyState datasets={datasets} onAsk={session.submit} onBrowse={() => fileInput.current?.click()} />
           ) : (
             <Conversation session={session} theme={theme.resolved} />
           )}

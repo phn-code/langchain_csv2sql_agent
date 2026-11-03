@@ -56,8 +56,8 @@ function ColumnRow({ column, onJump }: { column: ExplorerColumn; onJump: (table:
           )}
           {column.link.offset !== 0 && (
             <span className="text-[10.5px] text-muted">
-              IDs shifted by {column.link.offset > 0 ? "+" : ""}
-              {column.link.offset}
+              IDs shifted by {column.link.offset > 0 ? "+" : "−"}
+              {formatCount(Math.abs(column.link.offset))}
             </span>
           )}
         </div>
