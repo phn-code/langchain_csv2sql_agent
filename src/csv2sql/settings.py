@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     max_sql_attempts: int = 3
     enrich: bool = Field(default=True, description="Ask the model to describe uploaded data and suggest keys.")
     upload_dir: Path = Field(
-        default=Path("data"), description="Uploaded files; every ingest rebuilds from all of them."
+        default=Path("uploads"), description="Upload volume: live files in files/, staged copies beside it."
     )
     max_upload_bytes: int = 50 * 1024 * 1024
     cors_origins: list[str] = ["http://localhost:5173", "http://localhost:3000"]

@@ -1,8 +1,9 @@
 """Data API: upload and delete CSV files, read the schema the agent sees.
 
-This is the only process with owner credentials. Every change is staged: the upload directory is copied, the change
-is applied to the copy, and the copy is ingested. Files replace the live directory only after the database
-transaction commits, so a bad file leaves both the data and the directory as they were.
+This is the only process with owner credentials. Every change is staged: the live files are copied, the change is
+applied to the copy, and the copy is ingested. Files replace the live ones only after the database transaction
+commits, so a bad file leaves both the data and the files as they were. Live files sit in `UPLOAD_DIR/files` and
+copies in `UPLOAD_DIR/.staging-*`, on the same filesystem, so a non-root process with one writable volume can stage.
 """
 
 import asyncio
@@ -38,7 +39,7 @@ class DataService:
             raise ValueError("DATABASE_URL is required for the data API")
         self.settings = settings
         self.sample_dir = sample_dir
-        self.directory = settings.upload_dir
+        self.directory = settings.upload_dir / "files"
         self.directory.mkdir(parents=True, exist_ok=True)
         self.database = Database(
             str(settings.reader_database_url),

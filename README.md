@@ -87,7 +87,7 @@ Settings come from environment variables or `.env`.
 | `MAX_ROWS`             | `500`                | agent            | Rows fetched per query before the result is truncated.       |
 | `STATEMENT_TIMEOUT_MS` | `5000`               | agent, reader    | Postgres cancels queries that run longer.                    |
 | `MAX_SQL_ATTEMPTS`     | `3`                  | agent            | Attempts at a working query before the agent gives up.       |
-| `UPLOAD_DIR`           | `data`               | data API         | Where uploaded files are kept.                               |
+| `UPLOAD_DIR`           | `uploads`            | data API         | Upload volume. Live files are in `files/`.                   |
 | `MAX_UPLOAD_BYTES`     | `52428800`           | data API         | Largest accepted file.                                       |
 | `CORS_ORIGINS`         | localhost 5173, 3000 | data API         | JSON list of origins allowed to call the data API.           |
 
