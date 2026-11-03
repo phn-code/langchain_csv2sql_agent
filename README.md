@@ -1,104 +1,116 @@
-- The program is a full-stack data intelligence platform that automates the process of turning raw CSV files into a queryable SQL database and provides an AI-powered chat interface to interact with that data.
-- It features an intelligent data loader that automatically detects schemas and relationships (Foreign Keys) between disconnected CSVs, and a LangGraph-based agent that answers natural language questions about your data.
+# csv2sql
 
-🌟 Features
-** automated Data Ingestion:**
-Loads raw CSV files into PostgreSQL.
-Sanitizes table and column names (CamelCase -> snake_case).
-Auto-Schema Detection: Automatically identifies Primary Keys and infers Foreign Key relationships between tables based on naming conventions (e.g., matching customer_id in a Sales table to id in a Customers table).
-Smart Data Repair: Detects and fixes numeric offset issues in Foreign Keys during ingestion.
+Upload CSV files and ask questions about them in plain English. csv2sql loads the files into Postgres as typed tables with real primary and foreign keys. It then answers each question by writing SQL, running it under a read-only role, and showing you the answer, the rows, a chart, and the SQL it ran.
 
-🧠 AI Reasoning Engine:
-Powered by LangGraph (LangChain) and OpenAI.
-Context-aware SQL generation based on the detected schema.
+The sample data in `data/` is a bakery franchise business: transactions, customers, franchises, suppliers, and reviews. It is messy in ways real exports are messy, and the loader handles each problem:
 
-💬 Modern Chat UI:
-Clean interface for conversing with your data agents.
+- `sales_suppliers.csv` is two exports joined end to end. The second export has its own shorter header. The loader maps it onto the first header by name, so all 48 suppliers load and `sales_franchises.supplier_id` becomes a foreign key.
+- Customer ids in `sales_transactions.csv` are offset from `sales_customers.csv` by exactly 1,000,000. The loader detects the shift and corrects it in the `analytics` schema. The source rows in `raw` keep their original values.
+- Every customer id is also a valid transaction id. A loader that matched on values alone would link the two tables. csv2sql requires a name match before it checks values, so it does not.
 
-🐳 Fully Dockerized: One-command deployment for Database, API, Loader, and UI.
+## Run it with Docker
 
-🏗 System Architecture
-The project consists of four main services defined in docker-compose.yaml:
-db (PostgreSQL 16): Stores the raw data and the inferred schema metadata.
-app (Data Loader): A Python service that runs on startup to ingest CSVs, clean data, and map relationships.
-langgraph_server (AI Backend): Exposes the LangGraph agent API (Port 2024) to process natural language queries.
-chat-ui (Frontend): A Next.js web application (Port 3000) for the user interface.
+1. Put a model key in `.env`:
 
-🚀 Getting Started
-Prerequisites
-Docker & Docker Compose
-An OpenAI API Key
-Langchain API Key
+	```sh
+	echo "OPENAI_API_KEY=sk-..." > .env
+	```
 
-Installation
-1. Clone the repository:
-```bash
-git clone https://github.com/phn-code/insight_factory_sub_Kit_nguyen
-cd insight_factory 
+	To use Anthropic instead, set `ANTHROPIC_API_KEY` and `MODEL=anthropic:claude-sonnet-5-5`.
+
+2. Start the stack:
+
+	```sh
+	docker compose up --build
+	```
+
+3. Open <http://localhost:3000>. Click **Load sample data**, or drop your own CSV files on the page.
+
+| Service    | Port | Credentials        | Job                                                   |
+| ---------- | ---- | ------------------ | ----------------------------------------------------- |
+| `web`      | 3000 | none               | The chat, schema explorer, and upload UI              |
+| `data-api` | 8000 | Postgres owner     | Accepts uploads, rebuilds the database, serves schema |
+| `agent`    | 2024 | read-only role     | The LangGraph agent that answers questions            |
+| `db`       | none | none               | Postgres 16                                           |
+
+## Develop locally
+
+You need [uv](https://docs.astral.sh/uv/), Docker, Node 22 or later, and pnpm.
+
+```sh
+uv sync
+docker run -d --name csv2sql_pg -e POSTGRES_USER=owner -e POSTGRES_PASSWORD=owner \
+	-e POSTGRES_DB=csv2sql -p 5436:5432 postgres:16
+cp .env.example .env                     # then add OPENAI_API_KEY
+uv run csv2sql-ingest data               # load the sample and print what was inferred
+uv run uvicorn csv2sql.api:create_app --factory --port 8000
+uv run langgraph dev                     # agent on http://localhost:2024
+cd web && pnpm install && pnpm dev       # UI on http://localhost:5173
 ```
 
-2. Prepare your Data:
-Place your raw .csv files into the loader directory:
-```bash
-# Create the directory if it doesn't exist
-mkdir -p csv_to_sql/csv_files
-# Copy your CSVs there
-cp /path/to/your/data/*.csv ./csv_to_sql/csv_files/
+`csv2sql-ingest DIR --dry-run --no-ai` prints the inferred types, keys, and withheld columns without a database or a model.
 
+## Check your changes
+
+```sh
+uv run ruff check && uv run ruff format --check
+uv run pyright                           # strict mode
+uv run pytest                            # starts a throwaway Postgres with testcontainers
 ```
-3. Configure Environment Variables:
-Create a .env file in the root directory (or ensure your shell has these exported):
-```bash
-OPENAI_API_KEY=
-LANGCHAIN_API_KEY=
-LANGCHAIN_TRACING_V2=true
-LANGCHAIN_PROJECT=sql-agent-docker
-PROACTIVE_INSIGHTS= false
+
+Set `TEST_DATABASE_URL` to an owner URL to reuse a running Postgres instead of starting a container.
+
+The tests use a scripted model, so they need no API key. They check the security boundary directly against Postgres: the reader role cannot read `raw`, cannot write even after it turns off read-only mode, and cannot run a query past the statement timeout.
+
+## Measure answer quality
+
+`evals/cases.toml` holds 21 questions about the sample data, including three follow-up conversations. Each case has a reference query. A case passes when the agent's result contains the same rows as the reference result. Column names, column order, and extra columns do not matter, and row order matters only for cases marked `ordered`.
+
+```sh
+uv run csv2sql-ingest data
+uv run csv2sql-eval --model openai:gpt-5-mini
+uv run csv2sql-eval --model openai:gpt-5-nano --only top_product follow_up_pronoun
 ```
-4. Build and Run:
-```bash
-docker-compose up --build
+
+The command prints each case, the pass rate, and how many cases passed only after the agent corrected its own SQL. It writes the full results to `evals/results/`.
+
+## Configuration
+
+Settings come from environment variables or `.env`.
+
+| Variable               | Default              | Used by          | Meaning                                                      |
+| ---------------------- | -------------------- | ---------------- | ------------------------------------------------------------ |
+| `DATABASE_URL`         | none                 | data API, ingest | Owner connection. Required to load data.                     |
+| `READER_DATABASE_URL`  | none                 | all              | Read-only role. The data API creates the role from this URL. |
+| `MODEL`                | `openai:gpt-5-mini`  | all              | Any [`init_chat_model`] identifier.                          |
+| `ENRICH`               | `true`               | data API, ingest | Ask the model for descriptions and missed relationships.     |
+| `MAX_ROWS`             | `500`                | agent            | Rows fetched per query before the result is truncated.       |
+| `STATEMENT_TIMEOUT_MS` | `5000`               | agent, reader    | Postgres cancels queries that run longer.                    |
+| `MAX_SQL_ATTEMPTS`     | `3`                  | agent            | Attempts at a working query before the agent gives up.       |
+| `UPLOAD_DIR`           | `data`               | data API         | Where uploaded files are kept.                               |
+| `MAX_UPLOAD_BYTES`     | `52428800`           | data API         | Largest accepted file.                                       |
+| `CORS_ORIGINS`         | localhost 5173, 3000 | data API         | JSON list of origins allowed to call the data API.           |
+
+[`init_chat_model`]: https://python.langchain.com/api_reference/langchain/chat_models/langchain.chat_models.base.init_chat_model.html
+
+## Layout
+
+```text
+src/csv2sql/
+├── ingest/
+│   ├── profile.py    # read one file: encoding, delimiter, header sections, types, PII
+│   ├── keys.py       # primary and foreign keys: names propose, values prove
+│   ├── enrich.py     # optional AI descriptions and relationship suggestions, verified against the data
+│   ├── load.py       # raw and analytics schemas, constraints, comments, reader role
+│   └── pipeline.py   # directory in, report out
+├── api.py            # data API: upload, delete, schema
+├── database.py       # catalog from pg_catalog; read-only, bounded queries
+├── guard.py          # rejects non-SELECT SQL with a message the model can act on
+├── charts.py         # result shape to Vega-Lite spec, no generated code
+├── agent/graph.py    # plan -> write_sql <-> run_sql -> respond
+├── evals.py          # execution-accuracy harness
+└── server.py         # graph entry point for langgraph.json
+web/                  # React UI
 ```
-Wait a few moments for the database to initialize and the data loader to finish processing your CSVs.
 
-🖥️ Usage
-1. The Data Loading Process
-Check the logs of the csv_loader container to see the schema detection in action:
-```bash
-docker logs -f csv_loader
-```
-You will see messages indicating that tables were created, Primary Keys were added, and Foreign Keys were inferred and validated.
-
-2. Chatting with Data
-Open your browser and navigate to:
-http://localhost:3000
-
-- Ask questions: "How many customers bought product X?" or "Show me the top 5 sales regions."
-- The agent will generate SQL queries based on the schema created by the loader and return the results.
-
-3. API Access
-The LangGraph API is available at http://localhost:2024.
-
-🛠 Configuration Details
-Database Credentials
-
-Defaults are set in docker-compose.yaml.
-
-Host: db
-Port: 5432
-User: csvuser
-Password: csvpass
-Database: csvdb
-
-Schema Detection Logic
-The data_loader.py script uses the following logic to infer relationships:
-- Cleaning: Converts file names to snake_case table names.
-- PK Detection: Looks for columns named id, table_id, or tablename_id that are unique and non-null.
-- FK Detection: Scans other columns ending in _id. It attempts to match them against known table names (e.g., user_id -> looks for table users or user).
-- Validation: It runs a SQL query to ensure all FK values exist in the target PK column. If there is a constant numeric offset (e.g., IDs start at 0 in one file but 1 in another), it attempts to UPDATE the data to fix the relationship automatically.
-
-🐛 Troubleshooting
-- "Database not ready" errors: The services are configured with depends_on and health checks, but if the csv_loader fails to connect immediately, it will retry automatically (up to 10 times).
-- Invalid Foreign Keys: If the loader warns about "invalid references," it means the ID in your child table doesn't exist in the parent table, and the auto-fixer couldn't find a constant offset. Check your CSV data quality.
-- Frontend connection refused: Ensure the langgraph_server container is running and healthy (docker ps). The frontend expects the API at http://localhost:2024.
-
+[docs/architecture.md](docs/architecture.md) explains why the system is built this way.
