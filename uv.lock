@@ -411,6 +411,9 @@ dev = [
     { name = "ruff" },
     { name = "testcontainers" },
 ]
+server = [
+    { name = "langgraph-cli", extra = ["inmem"] },
+]
 
 [package.metadata]
 requires-dist = [
@@ -438,6 +441,7 @@ dev = [
     { name = "ruff", specifier = ">=0.17" },
     { name = "testcontainers", extras = ["postgres"], specifier = ">=4.15" },
 ]
+server = [{ name = "langgraph-cli", extras = ["inmem"], specifier = ">=0.4" }]
 
 [[package]]
 name = "distro"

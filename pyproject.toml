@@ -24,8 +24,9 @@ csv2sql-ingest = "csv2sql.ingest.__main__:main"
 csv2sql-eval = "csv2sql.evals:main"
 
 [dependency-groups]
+server = ["langgraph-cli[inmem]>=0.4"]
 dev = [
-  "langgraph-cli[inmem]>=0.4",
+  { include-group = "server" },
   "pyright>=1.1.414",
   "pytest>=9",
   "httpx>=0.28",
