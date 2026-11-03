@@ -43,7 +43,7 @@ export function ResultTable({ result }: { result: QueryResult }) {
                       value === null ? "text-muted" : "text-ink"
                     }`}
                   >
-                    {value === null ? <span className="text-[11px] italic">null</span> : formatCell(value, c.kind)}
+                    {value === null ? <span className="text-[11px] italic">null</span> : formatCell(value, c.kind, c.name)}
                   </td>
                 );
               })}

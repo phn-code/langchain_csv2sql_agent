@@ -140,10 +140,10 @@ function useFixtureSession(): ChatSession {
   const [messages, setMessages] = useState<Message[]>(() => (startEmpty ? [] : history));
   const [progress, setProgress] = useState<RunProgress | null>(null);
   const [streaming, setStreaming] = useState(false);
-  const cancelled = useRef(false);
+  const runToken = useRef(0);
 
   const run = useCallback(async (question: string, script: typeof live) => {
-    cancelled.current = false;
+    const token = ++runToken.current;
     setStreaming(true);
     setMessages((m) => [...m, human(`h-${m.length}`, question)]);
     let p = initialProgress;
@@ -151,7 +151,7 @@ function useFixtureSession(): ChatSession {
     for (const [i, event] of script.events.entries()) {
       if (hold && i === HOLD_AT) return;
       await wait(700);
-      if (cancelled.current) return;
+      if (runToken.current !== token) return;
       p = reduceProgress(p, event);
       setProgress(p);
     }
@@ -159,7 +159,7 @@ function useFixtureSession(): ChatSession {
     const words = script.answer.split(/(?<= )/);
     for (let n = 1; n <= words.length; n++) {
       await wait(45);
-      if (cancelled.current) return;
+      if (runToken.current !== token) return;
       const text = words.slice(0, n).join("");
       setMessages((m) => [...m.filter((x) => x.id !== id), ai(id, text, null)]);
     }
@@ -181,14 +181,18 @@ function useFixtureSession(): ChatSession {
       void run(question, {
         ...live,
         analysis,
-        events: live.events.filter((e) => e.step !== "run_sql" || e.status !== "failed").slice(0, 8),
+        events: [
+          ...live.events.slice(0, 5),
+          { step: "run_sql", status: "done" },
+          { step: "respond", status: "started" },
+        ],
       });
     },
     [run],
   );
 
   const stop = useCallback(() => {
-    cancelled.current = true;
+    runToken.current += 1;
     setStreaming(false);
     setProgress(null);
   }, []);

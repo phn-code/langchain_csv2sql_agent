@@ -74,12 +74,16 @@ function DataPane({ datasets, onFiles }: { datasets: Datasets; onFiles: (files: 
           <ul className="space-y-1 rounded-lg border border-line bg-surface p-2">
             {relationships.map((r) => (
               <li key={`${r.from}.${r.column}`} className="font-mono text-[11px] leading-snug">
-                <span className="text-ink">{r.from}</span>
-                <span className="text-muted">.{r.column}</span>
-                <span className="flex items-center gap-1 pl-3 text-accent">
-                  <LinkIcon className="size-3 shrink-0" />
-                  {r.to.table}
-                  <span className="text-muted">.{r.to.column}</span>
+                <span className="block truncate">
+                  <span className="text-ink">{r.from}</span>
+                  <span className="text-muted">.{r.column}</span>
+                </span>
+                <span className="flex items-center gap-1 truncate pl-2">
+                  <LinkIcon className="size-3 shrink-0 text-accent" />
+                  <span className="truncate">
+                    <span className="text-accent">{r.to.table}</span>
+                    <span className="text-muted">.{r.to.column}</span>
+                  </span>
                 </span>
               </li>
             ))}

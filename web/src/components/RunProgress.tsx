@@ -79,7 +79,7 @@ export function RunProgress({ progress }: { progress: Progress }) {
                 <span className="font-semibold text-warn">Attempt {i + 1} failed.</span>{" "}
                 <span className="font-mono text-[11.5px]">{error}</span>
                 {i === progress.failures.length - 1 && progress.steps.write_sql === "active" && (
-                  <span className="text-muted"> Rewriting the query…</span>
+                  <span className="mt-0.5 block text-muted">Rewriting the query…</span>
                 )}
               </span>
             </li>

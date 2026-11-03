@@ -82,9 +82,7 @@ _Python Example:_
 from langchain_anthropic import ChatAnthropic
 
 # Add tags via the .with_config method
-model = ChatAnthropic().with_config(
-    config={"tags": ["langsmith:nostream"]}
-)
+model = ChatAnthropic().with_config(config={"tags": ["langsmith:nostream"]})
 ```
 
 _TypeScript Example:_

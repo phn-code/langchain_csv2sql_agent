@@ -1,0 +1,61 @@
+# docker compose up --build, then open http://localhost:3000
+# Put OPENAI_API_KEY (or ANTHROPIC_API_KEY with MODEL=anthropic:...) in .env next to this file.
+x-reader: &reader-url postgresql://csv2sql_reader:${READER_PASSWORD:-reader-password}@db:5432/csv2sql
+x-model: &model-env
+  MODEL: ${MODEL:-openai:gpt-5-mini}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: csv2sql
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-owner-password}
+      POSTGRES_DB: csv2sql
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U csv2sql -d csv2sql"]
+      interval: 2s
+      retries: 30
+
+  data-api:
+    build: .
+    environment:
+      <<: *model-env
+      DATABASE_URL: postgresql://csv2sql:${POSTGRES_PASSWORD:-owner-password}@db:5432/csv2sql
+      READER_DATABASE_URL: *reader-url
+      CORS_ORIGINS: '["http://localhost:3000"]'
+    volumes: [uploads:/app/uploads]
+    ports: ["8000:8000"]
+    depends_on:
+      db: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
+      interval: 2s
+      retries: 30
+
+  agent:
+    build: .
+    command: ["langgraph", "dev", "--host", "0.0.0.0", "--port", "2024", "--no-browser", "--no-reload"]
+    environment:
+      <<: *model-env
+      READER_DATABASE_URL: *reader-url
+      LANGSMITH_API_KEY: ${LANGSMITH_API_KEY:-}
+      LANGSMITH_TRACING: ${LANGSMITH_TRACING:-false}
+    ports: ["2024:2024"]
+    depends_on:
+      data-api: { condition: service_healthy }
+
+  web:
+    build:
+      context: ./web
+      args:
+        VITE_API_URL: http://localhost:2024
+        VITE_DATA_API_URL: http://localhost:8000
+    ports: ["3000:80"]
+    depends_on: [agent, data-api]
+
+volumes:
+  pgdata:
+  uploads:

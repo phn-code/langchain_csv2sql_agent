@@ -15,7 +15,7 @@ import {
 
 export const client = new Client({ apiUrl: config.apiUrl });
 
-type State = { messages: Message[] };
+type State = { messages?: Message[] };
 
 export function useLiveSession(threadId: string | null, onThreadId: (id: string) => void): ChatSession {
   const [progress, setProgress] = useState<RunProgress | null>(null);
@@ -63,7 +63,9 @@ function describeError(error: unknown): string {
 export async function searchThreads(): Promise<ThreadSummary[]> {
   const threads = await client.threads.search<State>({ limit: 50, sortBy: "updated_at", sortOrder: "desc" });
   return threads.map((t) => {
-    const first = Array.isArray(t.values?.messages) ? t.values.messages.find((m) => m.type === "human") : undefined;
+    // Widening, not narrowing: threads created but never run come back with null values.
+    const values = t.values as State | null;
+    const first = values?.messages?.find((m) => m.type === "human");
     return { id: t.thread_id, title: first ? messageText(first) : "Untitled analysis", updatedAt: t.updated_at };
   });
 }

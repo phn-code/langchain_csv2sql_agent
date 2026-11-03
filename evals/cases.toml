@@ -1,0 +1,147 @@
+# Execution-accuracy cases for the bundled bakery sample. Each reference query defines the expected rows; the
+# agent's SQL may differ as long as its result holds the same rows (see src/csv2sql/evals.py).
+
+[[case]]
+id = "count_customers"
+question = "How many customers are there?"
+sql = "SELECT count(*) FROM sales_customers"
+
+[[case]]
+id = "total_revenue"
+question = "What is our total revenue?"
+sql = "SELECT sum(total_price) FROM sales_transactions"
+
+[[case]]
+id = "revenue_by_product"
+question = "Show revenue by product, highest first."
+sql = "SELECT product, sum(total_price) FROM sales_transactions GROUP BY product ORDER BY 2 DESC"
+ordered = true
+
+[[case]]
+id = "top_product"
+question = "Which product sold the most units?"
+sql = "SELECT product FROM sales_transactions GROUP BY product ORDER BY sum(quantity) DESC LIMIT 1"
+
+[[case]]
+id = "payment_method_share"
+question = "How many transactions used each payment method?"
+sql = "SELECT payment_method, count(*) FROM sales_transactions GROUP BY 1"
+
+[[case]]
+id = "daily_revenue"
+question = "Plot daily revenue over time."
+sql = "SELECT date_trunc('day', date_time)::date, sum(total_price) FROM sales_transactions GROUP BY 1 ORDER BY 1"
+ordered = true
+
+[[case]]
+id = "revenue_by_customer_country"
+question = "What is total revenue by customer country?"
+sql = """
+SELECT c.country, sum(t.total_price)
+FROM sales_transactions t JOIN sales_customers c USING (customer_id)
+GROUP BY 1
+"""
+
+[[case]]
+id = "top_franchises_by_revenue"
+question = "Which 5 franchises made the most revenue? Give their names."
+sql = """
+SELECT f.name, sum(t.total_price)
+FROM sales_transactions t JOIN sales_franchises f USING (franchise_id)
+GROUP BY f.franchise_id, f.name ORDER BY 2 DESC LIMIT 5
+"""
+ordered = true
+
+[[case]]
+id = "franchises_per_country"
+question = "How many franchises are in each country?"
+sql = "SELECT country, count(*) FROM sales_franchises GROUP BY 1"
+
+[[case]]
+id = "xl_franchises"
+question = "List the names of the XL franchises."
+sql = "SELECT name FROM sales_franchises WHERE size = 'XL'"
+
+[[case]]
+id = "supplier_of_franchise"
+question = "Who supplies the Golden Crumbs franchise, and what ingredient do they supply?"
+sql = """
+SELECT s.name, s.ingredient
+FROM sales_franchises f JOIN sales_suppliers s USING (supplier_id)
+WHERE f.name = 'Golden Crumbs'
+"""
+
+[[case]]
+id = "suppliers_by_continent"
+question = "How many suppliers are there per continent?"
+sql = "SELECT continent, count(*) FROM sales_suppliers GROUP BY 1"
+
+[[case]]
+id = "most_reviewed_franchises"
+question = "Which franchises have the most customer reviews? Include ties."
+sql = """
+SELECT name, n FROM (
+  SELECT f.name, count(*) AS n, rank() OVER (ORDER BY count(*) DESC) AS r
+  FROM media_customer_reviews m JOIN sales_franchises f USING (franchise_id)
+  GROUP BY f.franchise_id, f.name
+) ranked WHERE r = 1
+"""
+
+[[case]]
+id = "average_order_size"
+question = "What is the average quantity per transaction, by product?"
+sql = "SELECT product, round(avg(quantity), 2) FROM sales_transactions GROUP BY 1"
+
+[[case]]
+id = "busiest_hour"
+question = "At which hour of the day do we have the most transactions?"
+sql = """
+SELECT extract(hour FROM date_time)::int
+FROM sales_transactions GROUP BY 1 ORDER BY count(*) DESC LIMIT 1
+"""
+
+[[case]]
+id = "customers_without_purchases"
+question = "How many customers have never bought anything?"
+sql = """
+SELECT count(*) FROM sales_customers c
+WHERE NOT EXISTS (SELECT 1 FROM sales_transactions t WHERE t.customer_id = c.customer_id)
+"""
+
+[[case]]
+id = "top_customers"
+question = "Who are the top 5 customers by spend? Show their ids."
+sql = """
+SELECT customer_id, sum(total_price) FROM sales_transactions
+GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 5
+"""
+ordered = true
+
+[[case]]
+id = "revenue_by_gender"
+question = "Compare revenue from female and male customers."
+sql = """
+SELECT c.gender, sum(t.total_price)
+FROM sales_transactions t JOIN sales_customers c USING (customer_id) GROUP BY 1
+"""
+
+[[case]]
+id = "follow_up_filter"
+turns = ["Show revenue by product.", "Now only for transactions paid with visa."]
+sql = "SELECT product, sum(total_price) FROM sales_transactions WHERE payment_method = 'visa' GROUP BY 1"
+
+[[case]]
+id = "follow_up_regroup"
+turns = ["How many franchises are in each country?", "Break that down by size as well."]
+sql = "SELECT country, size, count(*) FROM sales_franchises GROUP BY 1, 2"
+
+[[case]]
+id = "follow_up_pronoun"
+turns = ["Which franchise made the most revenue?", "Which supplier does it use?"]
+sql = """
+SELECT s.name FROM sales_suppliers s
+WHERE s.supplier_id = (
+  SELECT f.supplier_id FROM sales_transactions t JOIN sales_franchises f USING (franchise_id)
+  GROUP BY f.franchise_id ORDER BY sum(t.total_price) DESC LIMIT 1
+)
+"""

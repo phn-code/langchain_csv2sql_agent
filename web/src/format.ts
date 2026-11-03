@@ -9,10 +9,16 @@ export function formatCount(n: number): string {
   return integer.format(n);
 }
 
-export function formatCell(value: Cell, kind: ColumnKind): string {
+/** Identifier columns read better without thousands separators (order 1000004, not 1,000,004). */
+export function isIdentifier(column: string): boolean {
+  return /(^|_)id$|[a-z]Id$|^id_/i.test(column);
+}
+
+export function formatCell(value: Cell, kind: ColumnKind, column = ""): string {
   if (value === null) return "";
   if (typeof value === "boolean") return value ? "true" : "false";
   if (kind === "number" && typeof value === "number") {
+    if (isIdentifier(column)) return String(value);
     return Number.isInteger(value) ? integer.format(value) : decimal.format(value);
   }
   if (kind === "temporal") {

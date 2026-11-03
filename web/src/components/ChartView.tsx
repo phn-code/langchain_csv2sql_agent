@@ -23,6 +23,9 @@ function themeConfig(): Record<string, unknown> {
     font,
     view: { stroke: "transparent" },
     axis,
+    axisX: { grid: false },
+    axisY: { gridDash: [2, 3], domain: false, ticks: false },
+    axisBand: { grid: false },
     legend: { labelColor: v("--ink-2"), titleColor: v("--ink-2"), labelFont: font, titleFont: font },
     title: { color: v("--ink"), font, fontSize: 13, fontWeight: 600, anchor: "start" },
     header: { labelColor: v("--ink-2"), titleColor: v("--ink-2") },
@@ -43,9 +46,10 @@ export default function ChartView({ spec, theme }: { spec: Record<string, unknow
     const el = ref.current;
     if (!el) return;
     let finalize: (() => void) | undefined;
-    let cancelled = false;
+    const abort = new AbortController();
+    const aborted = () => abort.signal.aborted;
     void import("vega-embed").then(async ({ default: embed }) => {
-      if (cancelled) return;
+      if (aborted()) return;
       const sized = { width: "container", height: 280, autosize: { type: "fit-x", contains: "padding" }, ...spec };
       try {
         const result = await embed(el, sized as Parameters<typeof embed>[1], {
@@ -54,16 +58,16 @@ export default function ChartView({ spec, theme }: { spec: Record<string, unknow
           renderer: "svg",
           tooltip: { theme: theme === "dark" ? "dark" : "light" },
         });
-        if (cancelled) result.finalize();
+        if (aborted()) result.finalize();
         else finalize = () => {
           result.finalize();
         };
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : "Chart failed to render");
+        if (!aborted()) setError(e instanceof Error ? e.message : "Chart failed to render");
       }
     });
     return () => {
-      cancelled = true;
+      abort.abort();
       finalize?.();
     };
   }, [spec, theme]);

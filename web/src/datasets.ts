@@ -27,6 +27,17 @@ function checkFiles(files: File[]): string | null {
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
+type Snapshot = { schema: SchemaState; report?: Report | null };
+
+async function snapshot(source: DataSource): Promise<Snapshot> {
+  try {
+    const [schema, report] = await Promise.all([source.getSchema(), source.getReport()]);
+    return { schema: { kind: "ready", schema }, report };
+  } catch (e) {
+    return { schema: { kind: "error", message: message(e) } };
+  }
+}
+
 export function useDatasets(source: DataSource) {
   const [schema, setSchema] = useState<SchemaState>({ kind: "loading" });
   const [report, setReport] = useState<Report | null>(null);
@@ -34,19 +45,24 @@ export function useDatasets(source: DataSource) {
   /** The report the user should see now: set after an ingest, cleared when they dismiss it. */
   const [shownReport, setShownReport] = useState<Report | null>(null);
 
+  const apply = useCallback((snapshot: Snapshot) => {
+    setSchema(snapshot.schema);
+    if (snapshot.report !== undefined) setReport(snapshot.report);
+  }, []);
+
   const refresh = useCallback(async () => {
-    try {
-      const [s, r] = await Promise.all([source.getSchema(), source.getReport()]);
-      setSchema({ kind: "ready", schema: s });
-      setReport(r);
-    } catch (e) {
-      setSchema({ kind: "error", message: message(e) });
-    }
-  }, [source]);
+    apply(await snapshot(source));
+  }, [apply, source]);
 
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    let current = true;
+    void snapshot(source).then((s) => {
+      if (current) apply(s);
+    });
+    return () => {
+      current = false;
+    };
+  }, [apply, source]);
 
   const ingest = useCallback(
     async (run: () => Promise<Report>) => {
