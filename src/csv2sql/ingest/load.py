@@ -12,6 +12,7 @@ import psycopg
 from psycopg import sql
 from psycopg.conninfo import conninfo_to_dict
 
+from csv2sql.ingest.enrich import Descriptions
 from csv2sql.ingest.keys import Keys
 from csv2sql.ingest.profile import Column, SqlType, Table, Value
 
@@ -37,8 +38,9 @@ def _quote(text: str, limit: int = 60) -> str:
     return "'" + (text if len(text) <= limit else text[: limit - 1] + "…").replace("'", "''") + "'"
 
 
-def describe_column(column: Column, rows: int, shift: tuple[int, str] | None) -> str:
-    notes = [f"From CSV column {column.source_name}."]
+def describe_column(column: Column, rows: int, shift: tuple[int, str] | None, meaning: str | None = None) -> str:
+    notes = [meaning] if meaning else []
+    notes.append(f"From CSV column {column.source_name}.")
     lo, hi = column.minimum, column.maximum
     if shift and isinstance(lo, int) and isinstance(hi, int):
         lo, hi = lo + shift[0], hi + shift[0]
@@ -56,14 +58,13 @@ def describe_column(column: Column, rows: int, shift: tuple[int, str] | None) ->
     return " ".join(notes)
 
 
-def describe_table(table: Table, withheld: Sequence[Column]) -> str:
-    notes = [f"Loaded from {table.source}: {len(table.rows):,} rows."]
+def describe_table(table: Table, withheld: Sequence[Column], meaning: str | None = None) -> str:
+    notes = [meaning] if meaning else []
+    notes.append(f"Loaded from {table.source}: {len(table.rows):,} rows.")
     if table.rejected:
         notes.append(f"{len(table.rejected)} malformed rows skipped.")
     if withheld:
-        notes.append(
-            "Withheld for privacy: " + ", ".join(f"{c.name} ({c.pii})" for c in withheld) + "."
-        )
+        notes.append("Withheld for privacy: " + ", ".join(f"{c.name} ({c.pii})" for c in withheld) + ".")
     return " ".join(notes)
 
 
@@ -93,15 +94,27 @@ def _ensure_reader(cur: psycopg.Cursor[object], reader_url: str, statement_timeo
     return role
 
 
+def prepare(conn: psycopg.Connection[object], reader_url: str, statement_timeout_ms: int) -> None:
+    """Make an empty database usable: the analytics schema and reader role exist before any data does."""
+    with conn.transaction(), conn.cursor() as cur:
+        cur.execute("SELECT pg_advisory_xact_lock(hashtext('csv2sql.load'))")
+        cur.execute(sql.SQL("CREATE SCHEMA IF NOT EXISTS {}").format(sql.Identifier(ANALYTICS)))
+        _ensure_reader(cur, reader_url, statement_timeout_ms)
+
+
 def load(
     conn: psycopg.Connection[object],
     tables: Sequence[Table],
     keys: Keys,
     reader_url: str,
     statement_timeout_ms: int,
+    descriptions: Descriptions | None = None,
 ) -> None:
+    descriptions = descriptions or Descriptions()
     shifts = {(fk.table, fk.column): fk for fk in keys.foreign if fk.offset}
     with conn.transaction(), conn.cursor() as cur:
+        # Serialise concurrent loads (two uploads at once, or several API replicas) on one advisory lock.
+        cur.execute("SELECT pg_advisory_xact_lock(hashtext('csv2sql.load'))")
         for schema in (RAW, ANALYTICS):
             cur.execute(sql.SQL("DROP SCHEMA IF EXISTS {} CASCADE").format(sql.Identifier(schema)))
             cur.execute(sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(schema)))
@@ -136,7 +149,9 @@ def load(
                 cur.execute(sql.SQL("ALTER TABLE {} ADD PRIMARY KEY ({})").format(target, sql.Identifier(pk)))
             withheld = [c for c in table.columns if c.pii is not None]
             cur.execute(
-                sql.SQL("COMMENT ON TABLE {} IS {}").format(target, sql.Literal(describe_table(table, withheld)))
+                sql.SQL("COMMENT ON TABLE {} IS {}").format(
+                    target, sql.Literal(describe_table(table, withheld, descriptions.tables.get(table.name)))
+                )
             )
             for c in kept:
                 fk = shifts.get((table.name, c.name))
@@ -144,7 +159,9 @@ def load(
                 cur.execute(
                     sql.SQL("COMMENT ON COLUMN {} IS {}").format(
                         sql.Identifier(ANALYTICS, table.name, c.name),
-                        sql.Literal(describe_column(c, len(table.rows), shift)),
+                        sql.Literal(
+                            describe_column(c, len(table.rows), shift, descriptions.columns.get((table.name, c.name)))
+                        ),
                     )
                 )
 

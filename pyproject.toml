@@ -13,7 +13,10 @@ dependencies = [
   "psycopg-pool>=3.3",
   "pydantic>=2.11",
   "pydantic-settings>=2.16",
+  "python-multipart>=0.0.20",
   "sqlglot>=30",
+  "starlette>=0.47",
+  "uvicorn>=0.35",
 ]
 
 [project.scripts]
@@ -25,6 +28,7 @@ dev = [
   "langgraph-cli[inmem]>=0.4",
   "pyright>=1.1.414",
   "pytest>=9",
+  "httpx>=0.28",
   "pytest-asyncio>=1.2",
   "ruff>=0.17",
   "testcontainers[postgres]>=4.15",
@@ -35,7 +39,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.ruff]
-line-length = 110
+line-length = 120
 target-version = "py312"
 
 [tool.ruff.lint]
@@ -58,3 +62,4 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"
 testpaths = ["tests"]
+filterwarnings = ["ignore:testcontainers.postgres is deprecated:DeprecationWarning"]

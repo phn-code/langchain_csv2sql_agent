@@ -2,9 +2,10 @@
 
 import time
 from dataclasses import dataclass
-from datetime import date, datetime, time as time_of_day
+from datetime import date, datetime
+from datetime import time as time_of_day
 from decimal import Decimal
-from typing import Literal, TypedDict
+from typing import Any, Literal, TypedDict
 from uuid import uuid4
 
 import psycopg
@@ -128,7 +129,7 @@ class Database:
         self.statement_timeout_ms = statement_timeout_ms
         self._pool = AsyncConnectionPool(url, min_size=1, max_size=8, open=False)
 
-    async def _open(self) -> AsyncConnectionPool:
+    async def _open(self) -> AsyncConnectionPool[Any]:
         if self._pool.closed:
             await self._pool.open(wait=True, timeout=30)
         return self._pool

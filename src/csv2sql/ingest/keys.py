@@ -4,10 +4,11 @@ Names propose a key and values must prove it. Values alone are not evidence: in 
 customer id is also a transaction id, so pure inclusion-dependency discovery would link the two tables.
 """
 
-from collections.abc import Sequence
+from collections.abc import Sequence, Set
 from dataclasses import dataclass
+from typing import Literal
 
-from csv2sql.ingest.profile import SqlType, Table
+from csv2sql.ingest.profile import SqlType, Table, Value
 
 KEY_TYPES = (SqlType.BIGINT, SqlType.TEXT)
 
@@ -20,6 +21,7 @@ class ForeignKey:
     parent_column: str
     offset: int = 0
     """Added to the child value to reach the parent key, for exports that renumbered one side."""
+    origin: Literal["name", "ai"] = "name"
 
 
 @dataclass(frozen=True)
@@ -61,7 +63,7 @@ def _primary_key(table: Table) -> str | None:
     return candidates[0].name if candidates else None
 
 
-def _match(child: set[object], parent: set[object], numeric: bool) -> int | None:
+def match_values(child: Set[Value], parent: Set[Value], numeric: bool) -> int | None:
     """The offset that maps every child value onto a parent value, or None."""
     if child <= parent:
         return 0
@@ -93,7 +95,7 @@ def infer_keys(tables: Sequence[Table]) -> Keys:
             matches: list[ForeignKey] = []
             for parent_name, pk in parents:
                 child_values = {v for v in table.values(column.name) if v is not None}
-                offset = _match(child_values, set(by_name[parent_name].values(pk)), column.type == SqlType.BIGINT)
+                offset = match_values(child_values, set(by_name[parent_name].values(pk)), column.type == SqlType.BIGINT)
                 if offset is None:
                     missing = len(child_values - set(by_name[parent_name].values(pk)))
                     rejected.append(
@@ -110,8 +112,7 @@ def infer_keys(tables: Sequence[Table]) -> Keys:
                 foreign.append(matches[0])
             elif matches:
                 rejected.extend(
-                    RejectedKey(m.table, m.column, m.parent_table, "ambiguous: several tables match")
-                    for m in matches
+                    RejectedKey(m.table, m.column, m.parent_table, "ambiguous: several tables match") for m in matches
                 )
 
     return Keys(primary=primary, foreign=tuple(foreign), rejected=tuple(rejected))

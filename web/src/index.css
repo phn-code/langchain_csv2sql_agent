@@ -1,0 +1,168 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+:root {
+  --bg: #f6f5f1;
+  --surface: #ffffff;
+  --surface-2: #f0eee8;
+  --line: #e4e1d9;
+  --line-strong: #cfcabf;
+  --ink: #1b1a17;
+  --ink-2: #4a4740;
+  --muted: #6e6a61;
+  --accent: #0f766e;
+  --accent-ink: #ffffff;
+  --accent-soft: #e3f1ee;
+  --warn: #9a5b00;
+  --warn-soft: #fbf0dc;
+  --danger: #b4232c;
+  --danger-soft: #fbe7e7;
+  --ok: #17803d;
+  --code-kw: #8a3ffc;
+  --code-str: #0f766e;
+  --code-num: #b45309;
+  --code-fn: #1d4ed8;
+  --code-com: #8b877d;
+  --chart-1: #0f766e;
+  --chart-2: #d97706;
+  --chart-3: #4f46e5;
+  --chart-4: #db2777;
+  --chart-5: #65a30d;
+  --chart-6: #0891b2;
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --bg: #0d1012;
+  --surface: #14181b;
+  --surface-2: #1b2024;
+  --line: #262c31;
+  --line-strong: #353c43;
+  --ink: #ebe9e4;
+  --ink-2: #c3c0b8;
+  --muted: #949aa1;
+  --accent: #2dd4bf;
+  --accent-ink: #04201c;
+  --accent-soft: #10302c;
+  --warn: #f3b454;
+  --warn-soft: #2d2210;
+  --danger: #f2777c;
+  --danger-soft: #331618;
+  --ok: #4ade80;
+  --code-kw: #c4a5ff;
+  --code-str: #5eead4;
+  --code-num: #fbbf24;
+  --code-fn: #93c5fd;
+  --code-com: #7c838a;
+  --chart-1: #2dd4bf;
+  --chart-2: #fbbf24;
+  --chart-3: #a5b4fc;
+  --chart-4: #f472b6;
+  --chart-5: #a3e635;
+  --chart-6: #67e8f9;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-ok: var(--ok);
+  --font-sans: "Inter", "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Code", "SFMono-Regular", ui-monospace, Menlo, Consolas, monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+.tok-kw { color: var(--code-kw); font-weight: 600; }
+.tok-str { color: var(--code-str); }
+.tok-num { color: var(--code-num); }
+.tok-fn { color: var(--code-fn); }
+.tok-com { color: var(--code-com); font-style: italic; }
+
+.prose-answer > * + * { margin-top: 0.65em; }
+.prose-answer p { line-height: 1.65; }
+.prose-answer strong { font-weight: 650; color: var(--ink); }
+.prose-answer ul { list-style: disc; padding-left: 1.25em; }
+.prose-answer ol { list-style: decimal; padding-left: 1.25em; }
+.prose-answer li + li { margin-top: 0.25em; }
+.prose-answer code {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0.05em 0.3em;
+}
+.prose-answer a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+.prose-answer table { border-collapse: collapse; font-size: 0.875rem; }
+.prose-answer th, .prose-answer td { border: 1px solid var(--line); padding: 0.3em 0.6em; text-align: left; }
+
+.caret::after {
+  content: "";
+  display: inline-block;
+  width: 0.5em;
+  height: 1.05em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: var(--accent);
+  animation: blink 1s steps(2, start) infinite;
+}
+
+@keyframes blink {
+  to { visibility: hidden; }
+}
+
+@keyframes pulse-ring {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent); }
+  100% { box-shadow: 0 0 0 6px transparent; }
+}
+.pulse-ring { animation: pulse-ring 1.2s ease-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .caret::after, .pulse-ring { animation: none; }
+}
+
+.vega-embed { width: 100%; }
+.vega-embed summary { opacity: 0.6; }

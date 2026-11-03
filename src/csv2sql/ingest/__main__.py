@@ -1,29 +1,32 @@
 """`csv2sql-ingest DIR`: load every CSV in DIR into Postgres and print what was inferred."""
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
 import psycopg
 
-from csv2sql.ingest.keys import Keys, infer_keys
-from csv2sql.ingest.load import load
-from csv2sql.ingest.profile import Table, read_table
+from csv2sql.ingest.pipeline import Report, enrichment_model, ingest
 from csv2sql.settings import Settings
 
 
-def report(tables: list[Table], keys: Keys) -> str:
+def summarize(report: Report) -> str:
     lines: list[str] = []
-    for table in tables:
-        pk = keys.primary.get(table.name)
-        lines.append(f"{table.name}  {len(table.rows):,} rows  primary key: {pk or 'none found'}")
-        lines.extend(f"  skipped line {r.line}: {r.reason}" for r in table.rejected)
-        lines.extend(f"  withheld {c.name} ({c.pii})" for c in table.columns if c.pii)
+    for t in report["tables"]:
+        lines.append(f"{t['name']}  {t['rows']:,} rows  primary key: {t['primary_key'] or 'none found'}")
+        lines.extend(f"  skipped line {r['line']}: {r['reason']}" for r in t["rejected_rows"])
+        lines.extend(f"  withheld {w['column']} ({w['pii']})" for w in t["withheld"])
     lines.append("relationships")
-    for fk in keys.foreign:
-        shift = f"  (shifted {fk.offset:+,})" if fk.offset else ""
-        lines.append(f"  {fk.table}.{fk.column} -> {fk.parent_table}.{fk.parent_column}{shift}")
-    lines.extend(f"  rejected {r.table}.{r.column} -> {r.parent_table}: {r.reason}" for r in keys.rejected)
+    for f in report["relationships"]:
+        notes = [f"shifted {f['offset']:+,}"] if f["offset"] else []
+        notes += ["suggested by AI"] if f["origin"] == "ai" else []
+        suffix = f"  ({', '.join(notes)})" if notes else ""
+        lines.append(f"  {f['table']}.{f['column']} -> {f['parent_table']}.{f['parent_column']}{suffix}")
+    lines.extend(
+        f"  rejected {r['table']}.{r['column']} -> {r['parent_table']}: {r['reason']}"
+        for r in report["rejected_relationships"]
+    )
     return "\n".join(lines)
 
 
@@ -31,23 +34,26 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("directory", type=Path)
     parser.add_argument("--dry-run", action="store_true", help="Infer and report without touching the database.")
+    parser.add_argument("--no-ai", action="store_true", help="Skip AI descriptions and relationship suggestions.")
+    parser.add_argument("--json", action="store_true", help="Print the report as JSON.")
     args = parser.parse_args()
 
-    paths = sorted(args.directory.glob("*.csv"))
-    if not paths:
-        sys.exit(f"No CSV files in {args.directory}")
-    tables = [read_table(p) for p in paths]
-    keys = infer_keys(tables)
-    print(report(tables, keys))
-    if args.dry_run:
-        return
-
     settings = Settings()  # type: ignore[call-arg]
-    if settings.database_url is None:
-        sys.exit("DATABASE_URL is required to load data")
-    with psycopg.connect(str(settings.database_url)) as conn:
-        load(conn, tables, keys, str(settings.reader_database_url), settings.statement_timeout_ms)
-    print(f"Loaded {len(tables)} tables")
+    model = None if args.no_ai else enrichment_model(settings)
+    if args.dry_run:
+        report = ingest(args.directory, None, reader_url="", statement_timeout_ms=0, model=model)
+    else:
+        if settings.database_url is None:
+            sys.exit("DATABASE_URL is required to load data")
+        with psycopg.connect(str(settings.database_url)) as conn:
+            report = ingest(
+                args.directory,
+                conn,
+                reader_url=str(settings.reader_database_url),
+                statement_timeout_ms=settings.statement_timeout_ms,
+                model=model,
+            )
+    print(json.dumps(report, indent=2) if args.json else summarize(report))
 
 
 if __name__ == "__main__":

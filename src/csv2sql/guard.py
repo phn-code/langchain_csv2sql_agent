@@ -27,9 +27,7 @@ _WRITES = (
     exp.Set,
     exp.Grant,
 )
-_DENIED_FUNCTIONS = frozenset(
-    {"current_setting", "set_config", "dblink", "query_to_xml", "query_to_xml_and_xmlschema"}
-)
+_DENIED_FUNCTIONS = frozenset({"current_setting", "set_config", "dblink", "query_to_xml", "query_to_xml_and_xmlschema"})
 _DENIED_PREFIXES = ("pg_", "lo_", "dblink_", "txid_")
 
 

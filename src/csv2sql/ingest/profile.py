@@ -1,6 +1,7 @@
 """Read one CSV file into a typed, profiled table."""
 
 import csv
+import io
 import re
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -66,13 +67,125 @@ class Table:
 MAX_CATEGORIES = 12
 
 
+# Postgres reserved and type-function keywords (pg_get_keywords catcode R and T). A model writing SQL will not
+# quote them, so names that collide get a trailing underscore instead.
+_KEYWORDS = frozenset(
+    [
+        "all",
+        "analyse",
+        "analyze",
+        "and",
+        "any",
+        "array",
+        "as",
+        "asc",
+        "asymmetric",
+        "authorization",
+        "binary",
+        "both",
+        "case",
+        "cast",
+        "check",
+        "collate",
+        "collation",
+        "column",
+        "concurrently",
+        "constraint",
+        "create",
+        "cross",
+        "current_catalog",
+        "current_date",
+        "current_role",
+        "current_schema",
+        "current_time",
+        "current_timestamp",
+        "current_user",
+        "default",
+        "deferrable",
+        "desc",
+        "distinct",
+        "do",
+        "else",
+        "end",
+        "except",
+        "false",
+        "fetch",
+        "for",
+        "foreign",
+        "freeze",
+        "from",
+        "full",
+        "grant",
+        "group",
+        "having",
+        "ilike",
+        "in",
+        "initially",
+        "inner",
+        "intersect",
+        "into",
+        "is",
+        "isnull",
+        "join",
+        "lateral",
+        "leading",
+        "left",
+        "like",
+        "limit",
+        "localtime",
+        "localtimestamp",
+        "natural",
+        "not",
+        "notnull",
+        "null",
+        "offset",
+        "on",
+        "only",
+        "or",
+        "order",
+        "outer",
+        "overlaps",
+        "placing",
+        "primary",
+        "references",
+        "returning",
+        "right",
+        "select",
+        "session_user",
+        "similar",
+        "some",
+        "symmetric",
+        "system_user",
+        "table",
+        "tablesample",
+        "then",
+        "to",
+        "trailing",
+        "true",
+        "union",
+        "unique",
+        "user",
+        "using",
+        "variadic",
+        "verbose",
+        "when",
+        "where",
+        "window",
+        "with",
+    ]
+)
+_MAX_IDENTIFIER = 63
+
+
 def snake_case(name: str) -> str:
     name = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", name.strip())
     name = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", name)
-    name = re.sub(r"[^0-9a-zA-Z]+", "_", name).strip("_").lower()
+    name = re.sub(r"[^0-9a-zA-Z]+", "_", name).strip("_").lower()[:_MAX_IDENTIFIER]
     if not name:
         return "column"
-    return f"_{name}" if name[0].isdigit() else name
+    if name[0].isdigit():
+        name = f"_{name}"
+    return f"{name}_" if name in _KEYWORDS else name
 
 
 def _unique_names(names: Sequence[str]) -> list[str]:
@@ -84,22 +197,32 @@ def _unique_names(names: Sequence[str]) -> list[str]:
     return result
 
 
-_INTEGER = re.compile(r"[+-]?(0|[1-9]\d*)")
-_FLOAT = re.compile(r"[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?")
-_BOOLEANS = {"true": True, "t": True, "yes": True, "y": True, "false": False, "f": False, "no": False, "n": False}
+_INTEGER = re.compile(r"[+-]?[$€£]?(0|[1-9]\d{0,2}(,\d{3})+|[1-9]\d*)")
+_FLOAT = re.compile(r"[+-]?[$€£]?([1-9]\d{0,2}(,\d{3})+(\.\d*)?|(0|[1-9]\d*)(\.\d*)?|\.\d+)([eE][+-]?\d+)?")
+_NUMBER_NOISE = str.maketrans("", "", "$€£,")
+_BOOLEANS = {
+    "true": True,
+    "t": True,
+    "yes": True,
+    "y": True,
+    "false": False,
+    "f": False,
+    "no": False,
+    "n": False,
+}
 _INT64 = 2**63
 
 
 def _parse_int(text: str) -> int:
-    if not _INTEGER.fullmatch(text) or abs(int(text)) >= _INT64:
+    if not _INTEGER.fullmatch(text) or abs(value := int(text.translate(_NUMBER_NOISE))) >= _INT64:
         raise ValueError(text)
-    return int(text)
+    return value
 
 
 def _parse_float(text: str) -> float:
     if not _FLOAT.fullmatch(text):
         raise ValueError(text)
-    return float(text)
+    return float(text.translate(_NUMBER_NOISE))
 
 
 def _parse_bool(text: str) -> bool:
@@ -118,13 +241,31 @@ def _parse_timestamp(text: str) -> datetime:
     return datetime.fromisoformat(text)
 
 
-# Tried in order; the first parser that accepts every non-empty value wins.
+def _strptime(*formats: str, keep_time: bool) -> Callable[[str], Value]:
+    def parse(text: str) -> Value:
+        for fmt in formats:
+            try:
+                parsed = datetime.strptime(text, fmt)
+            except ValueError:
+                continue
+            return parsed if keep_time else parsed.date()
+        raise ValueError(text)
+
+    return parse
+
+
+# Tried in order; the first parser that accepts every non-empty value wins. Slash dates try month-first, so a
+# column is read day-first only when some value rules month-first out (a first component above 12).
 _PARSERS: tuple[tuple[SqlType, Callable[[str], Value]], ...] = (
     (SqlType.BIGINT, _parse_int),
     (SqlType.DOUBLE, _parse_float),
     (SqlType.BOOLEAN, _parse_bool),
     (SqlType.DATE, _parse_date),
     (SqlType.TIMESTAMPTZ, _parse_timestamp),
+    (SqlType.DATE, _strptime("%m/%d/%Y", "%Y/%m/%d", keep_time=False)),
+    (SqlType.DATE, _strptime("%d/%m/%Y", keep_time=False)),
+    (SqlType.TIMESTAMPTZ, _strptime("%m/%d/%Y %H:%M", "%m/%d/%Y %H:%M:%S", keep_time=True)),
+    (SqlType.TIMESTAMPTZ, _strptime("%d/%m/%Y %H:%M", "%d/%m/%Y %H:%M:%S", keep_time=True)),
 )
 
 
@@ -210,9 +351,25 @@ def _section_layout(record: Sequence[str], names: Sequence[str]) -> list[int] | 
     return [names.index(cell) for cell in cells]
 
 
+def _decode(data: bytes) -> str:
+    for encoding in ("utf-8-sig", "cp1252"):
+        try:
+            return data.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    return data.decode("latin-1")
+
+
+def _delimiter(text: str) -> str:
+    """The candidate that splits the header line most. Headers rarely hold quoted text, unlike data rows."""
+    header = text.split("\n", 1)[0]
+    return max(",;\t|", key=header.count) if any(d in header for d in ",;\t|") else ","
+
+
 def read_table(path: Path) -> Table:
-    with path.open(newline="", encoding="utf-8-sig") as f:
-        reader = csv.reader(f)
+    text = _decode(path.read_bytes())
+    with io.StringIO(text, newline="") as f:
+        reader = csv.reader(f, delimiter=_delimiter(text))
         header = next(reader, None)
         if header is None:
             raise ValueError(f"{path.name} is empty")
